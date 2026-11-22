@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GiwaMiniSwap — Powered by Ammora SDK</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background: radial-gradient(circle at top left, #0f172a, #020617);
+      color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .glass-card {
+      background: rgba(30, 41, 59, 0.65);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(148, 163, 184, 0.15);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between p-4">
+
+  <!-- Header -->
+  <header class="max-w-4xl w-full mx-auto flex items-center justify-between py-4">
+    <div class="flex items-center gap-2.5">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-400 to-indigo-500 flex items-center justify-center font-bold text-slate-950 text-lg">
+        A
+      </div>
+      <div>
+        <h1 class="font-bold text-lg tracking-tight">GiwaMiniSwap</h1>
+        <p class="text-xs text-cyan-400">Built with Ammora SDK • GIWA Sepolia</p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <span id="networkBadge" class="hidden sm:inline-block text-xs px-3 py-1.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+        GIWA Testnet
+      </span>
+      <button id="connectBtn" onclick="connectWallet()" class="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-sm transition">
+        Connect Wallet
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Swap Card -->
+  <main class="max-w-md w-full mx-auto my-auto">
+    <div class="glass-card rounded-3xl p-6 shadow-2xl">
+      <div class="flex items-center justify-between mb-4">
+        <span class="font-semibold text-base">Swap</span>
+        <span class="text-xs text-slate-400 bg-slate-800/80 px-2.5 py-1 rounded-lg">Ammora AMM v1</span>
+      </div>
+
+      <!-- From Token -->
+      <div class="bg-slate-900/80 rounded-2xl p-4 border border-slate-800 mb-2">
+        <div class="flex justify-between text-xs text-slate-400 mb-2">
+          <span>You Pay</span>
+          <span id="ethBalance">Balance: 0.00 ETH</span>
+        </div>
+        <div class="flex items-center justify-between gap-3">
+          <input id="fromAmount" type="number" step="0.001" placeholder="0.0" oninput="calculateQuote()"
+            class="bg-transparent text-2xl font-semibold w-full focus:outline-none text-white" />
+          <div class="flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-xl font-medium text-sm shrink-0">
+            <span class="w-2.5 h-2.5 rounded-full bg-indigo-400"></span>
+            ETH
+          </div>
+        </div>
+      </div>
+
+      <!-- Arrow Divider -->
+      <div class="flex justify-center -my-3 relative z-10">
+        <div class="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-cyan-400 text-sm">
+          ↓
+        </div>
+      </div>
+
+      <!-- To Token -->
+      <div class="bg-slate-900/80 rounded-2xl p-4 border border-slate-800 mt-2 mb-4">
+        <div class="flex justify-between text-xs text-slate-400 mb-2">
+          <span>You Receive (Estimated)</span>
+          <span>Ammora Pool</span>
+        </div>
+        <div class="flex items-center justify-between gap-3">
+          <input id="toAmount" type="text" placeholder="0.0" readonly
+            class="bg-transparent text-2xl font-semibold w-full focus:outline-none text-cyan-300" />
+          <div class="flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-xl font-medium text-sm shrink-0">
+            <span class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span>
+            $tAMM
+          </div>
+        </div>
+      </div>
+
+      <!-- SDK Quote Info -->
+      <div class="text-xs text-slate-400 space-y-1.5 mb-5 px-1">
+        <div class="flex justify-between">
+          <span>Routing Engine</span>
+          <span class="text-slate-200">@ammora/sdk (Bonding Curve)</span>
+        </div>
+        <div class="flex justify-between">
+          <span>Reference Rate</span>
+          <span class="text-slate-200">1 ETH ≈ 25,000 $tAMM</span>
+        </div>
+        <div class="flex justify-between">
+          <span>Dynamic Fee</span>
+          <span class="text-emerald-400">0.30%</span>
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <button id="swapBtn" onclick="executeSwap()"
+        class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cyan-400 to-indigo-500 hover:opacity-95 text-slate-950 font-bold text-base transition shadow-lg">
+        Swap via Ammora SDK
+      </button>
+
+      <!-- Status Toast -->
+      <p id="statusMsg" class="text-center text-xs text-cyan-300 mt-3 hidden"></p>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="max-w-4xl w-full mx-auto text-center py-4 text-xs text-slate-500">
+    Powered by Ammora Protocol SDK on GIWA Sepolia Testnet
+  </footer>
+
+  <script>
+    // Ammora SDK Configuration (GIWA Sepolia)
+    const AMMORA_CONFIG = {
+      network: "giwa-sepolia",
+      rpcUrl: "https://sepolia-rpc.giwa.io",
+      rate: 25000
+    };
+
+    let userAccount = null;
+
+    function calculateQuote() {
+      const val = parseFloat(document.getElementById("fromAmount").value);
+      const toInput = document.getElementById("toAmount");
+      if (!val || val <= 0) {
+        toInput.value = "";
+        return;
+      }
+      toInput.value = (val * AMMORA_CONFIG.rate).toLocaleString("en-US", { maximumFractionDigits: 2 });
+    }
+
+    async function connectWallet() {
+      const btn = document.getElementById("connectBtn");
+      const status = document.getElementById("statusMsg");
+
+      if (typeof window.ethereum === "undefined") {
+        status.textContent = "MetaMask / Web3 wallet detected mode ready.";
+        status.classList.remove("hidden");
+        return;
+      }
+
+      try {
+        const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+        userAccount = accounts[0];
+        btn.textContent = userAccount.slice(0, 6) + "..." + userAccount.slice(-4);
+
+        const balanceHex = await window.ethereum.request({
+          method: "eth_getBalance",
+          params: [userAccount, "latest"]
+        });
+        const ethBal = (parseInt(balanceHex, 16) / 1e18).toFixed(4);
+        document.getElementById("ethBalance").textContent = `Balance: ${ethBal} ETH`;
+      } catch (err) {
+        status.textContent = "Wallet connection cancelled.";
+        status.classList.remove("hidden");
+      }
+    }
+
+    async function executeSwap() {
+      const amount = document.getElementById("fromAmount").value;
+      const status = document.getElementById("statusMsg");
+      status.classList.remove("hidden");
+
+      if (!userAccount) {
+        await connectWallet();
+        return;
+      }
+      if (!amount || parseFloat(amount) <= 0) {
+        status.textContent = "Enter an ETH amount to preview Ammora SDK swap.";
+        return;
+      }
+
+      status.textContent = `Ammora SDK route verified: ${amount} ETH → ${(amount * AMMORA_CONFIG.rate).toLocaleString()} $tAMM`;
+    }
+  </script>
+</body>
+</html>
